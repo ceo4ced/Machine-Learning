@@ -1,0 +1,128 @@
+---
+title: "Human Activity Report"
+author: "Cedric Williams"
+date: "March 22, 2015"
+output: html_document
+---
+
+
+
+Loading the Dataset.  The first step in my analysis was setting the working drive and loading in the data from the system.  I choose to load the data locally rather than use the URL provided.
+
+```{r,eval=FALSE,echo=TRUE}
+  
+  setwd("~/Documents/Coursera/Machine Learning")
+  
+  training.data <<- read.csv("training.csv", header=TRUE, sep=",", na.strings=c("NA","#DIV/0!",""))
+  testing.data <<- read.csv("testing.csv", header=TRUE, sep=",", na.strings=c("NA","#DIV/0!",""))
+```  
+ Next we need to load all the libraries used in our algorithm, either for cleaning our dataset or for the prediction.
+```{r,eval=FALSE,echo=TRUE} 
+ library(caret)
+  library(rpart)
+  library(rpart.plot)
+  library(RColorBrewer)
+  library(rattle)
+  library(randomForest)
+```  
+ 
+ To ensure the algorithm works with the same dataset for reproduction, we need to set the seed.  
+```{r} 
+ set.seed(12345)
+  
+```
+
+Now that we've loaded the data, we'll need to split the data into Training and Testing datasets.  We're choosing to split the dataset 60% for Training and 40% for Testing.  We'll use the createDataPartition and se
+```{r,eval=FALSE,echo=TRUE}
+  in.Train <<- createDataPartition(y=training.data$classe, p=0.6, list=FALSE)
+  my.Training <<- training.data[in.Train, ]
+  my.Testing <<- training.data[-in.Train, ]
+```
+
+Now that we've split the dataset into Training and Testing subsets, we'll need to clean the data and remove Near Zero factors which have no bearing on our algorithm,  For that, we'll use the nearZeroVar to find any zero variables then load those into a new variable to remove from out dataset.
+```{r, eval=FALSE,echo=TRUE}
+
+  nzv.data <<- nearZeroVar(my.Training, saveMetrics=TRUE)
+  nzv.vars2 <<-row.names(nzv.data[nzv.data$nzv==TRUE,])
+  nzv.vars <<- names(my.Training) %in% nzv.vars2
+  my.Training <<- my.Training[!nzv.vars]
+```
+
+We'll need to remove the first column from our Training dataset as well.
+
+```{r, eval=FALSE,echo=TRUE}
+my.Training <<- my.Training[c(-1)]
+
+```
+
+Since the data has a high population of NA's, we'll remove any dataset that has a large portion.  We think 60% is a adequate threshold.  We'll use another varibale instead of the main Training one to run our "For" loop.
+We also need to save the clean dataset back into the main Training one.
+```{r, eval=FALSE, echo=TRUE}
+training.V3 <<- my.Training
+  for(i in 1:length(my.Training)) {
+    
+    if(sum(is.na(my.Training[,i]))/nrow(my.Training) >=.6) {
+      for(j in 1:length(training.V3)) {
+        if(length(grep(names(my.Training[i]),names(training.V3)[j])) ==1) {
+         training.V3 <<- training.V3[,-j]
+        }
+      } 
+    }  
+  }
+
+ my.Training <<- training.V3
+```
+
+We want to grab the column names from our Training set and save them in two new variable sets to clean our Testing set.  We want to use a For loop to grab the classes from Training and mirror and translate them for Testing. This is important for the Decision Tree and RandomForest analysis.
+
+```{r, eval=FALSE, echo=TRUE}
+  clean.a <<- colnames(my.Training)
+  clean.b <<- colnames(my.Training[,-58])
+  my.Testing <<- my.Testing[clean.a]
+  testing <<- testing.data[clean.b]
+
+  for (i in 1:length(testing)) {
+    for(j in 1:length(my.Training)) {
+     if(length(grep(names(my.Training[i]), names(testing)[j]))==1) {
+       class(testing[j]) <<-class(my.Training[i])
+      }
+    }     
+ }
+```
+Then bind the data into the Testing dataset and remove the first row in Testing.
+
+```{r, eval=FALSE, echo=TRUE}
+  testing <<- rbind(my.Training[2, -58], testing)
+  testing <- testing[-1,]
+```
+
+Next we want to fit two models to run against our Training dataset and Testing dataset.  We'll also complete a Decision Tree graph for further analysis and review as well as a Random Forest analysis using Confusion Matrices.  Confusion Matrix for Model A and Random Forest setup with Training data
+
+```{r,eval=FALSE, echo=TRUE}
+  modFitA1 <- rpart(classe ~ ., data=my.Training, method="class")
+  fancyRpartPlot(modFitA1)
+  predictionsA1 <<- predict(modFitA1, my.Testing, type="class")
+  confusionMatrix(predictionsA1, my.Testing$classe)
+  modFitB1 <<- randomForest(classe ~ ., data=my.Training)
+  predictionsB1 <<- predict(modFitB1, my.Testing, type="class")
+  confusionMatrix(predictionsB1, my.Testing$classe)
+```
+
+Final Random Forest Model using Testing Data.
+```{r, echo=TRUE, eval=FALSE}
+
+  predictionsB2 <<- predict(modFitB1, testing, type="class")
+```
+
+Run final prediction and generate 20 answers
+```{r, echo=TRUE, eval=FALSE}
+pml_write_files = function(x) {
+    n = length(x)
+    for(i in 1:n){
+     filename = paste0("problem_id_2",i,".txt")
+      write.table(x[i], file=filename, quote=FALSE, row.names=FALSE, col.names=FALSE)}}
+
+pml_write_files(predictionsB2)
+
+```
+
